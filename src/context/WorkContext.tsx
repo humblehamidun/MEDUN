@@ -8,6 +8,7 @@ import {
   UserSettings,
   QuickNote,
   QuickNoteColor,
+  DailyFocus,
 } from '../types';
 import {
   INITIAL_CATEGORIES,
@@ -40,6 +41,14 @@ interface WorkContextType {
   deleteTask: (id: string) => void;
   toggleTaskComplete: (id: string) => void;
   duplicateTaskToDate: (id: string, targetDate: string) => void;
+
+  // Daily Focus / Sasaran Utama Harian
+  dailyFocuses: Record<string, DailyFocus>;
+  todayFocus: DailyFocus | null;
+  setDailyFocus: (title: string, taskId?: string, date?: string, motivationNote?: string) => DailyFocus;
+  toggleDailyFocusComplete: (date?: string) => void;
+  clearDailyFocus: (date?: string) => void;
+  pinTaskAsDailyFocus: (taskId: string, targetDate?: string) => void;
 
   // Time Tracking
   startTimer: (taskId: string, mode?: 'count_up' | 'pomodoro', pomodoroTargetMinutes?: number) => void;
@@ -74,6 +83,7 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'kerjaalur_notifications_v1',
   SETTINGS: 'kerjaalur_settings_v1',
   QUICK_NOTES: 'kerjaalur_quick_notes_v1',
+  DAILY_FOCUSES: 'kerjaalur_daily_focuses_v1',
 };
 
 const WorkContext = createContext<WorkContextType | undefined>(undefined);
@@ -148,6 +158,28 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
 
+  // 7. Daily Focus State (mapped by date YYYY-MM-DD)
+  const [dailyFocuses, setDailyFocuses] = useState<Record<string, DailyFocus>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.DAILY_FOCUSES);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.warn('Failed loading daily focuses:', e);
+    }
+    const today = getTodayString();
+    return {
+      [today]: {
+        id: `focus-${today}`,
+        date: today,
+        title: 'Finalisasi Modul Otentikasi dan Dashboard Pengguna',
+        taskId: 'task-30-1',
+        isCompleted: false,
+        motivationNote: 'Satu sasaran utama ini akan membuka jalan bagi rilis versi berikutnya. Tetap fokus tanpa multitasking!',
+        createdAt: new Date().toISOString(),
+      },
+    };
+  });
+
   const [currentRunningElapsed, setCurrentRunningElapsed] = useState<number>(0);
   const breakNotifiedRef = useRef<boolean>(false);
 
@@ -191,6 +223,14 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Failed saving quick notes to storage:', e);
     }
   }, [quickNotes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DAILY_FOCUSES, JSON.stringify(dailyFocuses));
+    } catch (e) {
+      console.warn('Failed saving daily focuses to storage:', e);
+    }
+  }, [dailyFocuses]);
 
   useEffect(() => {
     try {
@@ -373,6 +413,21 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
       stopTimer();
     }
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    // Decouple taskId if it matches in dailyFocuses
+    setDailyFocuses((prev) => {
+      let changed = false;
+      const updated = { ...prev };
+      Object.keys(updated).forEach((dateKey) => {
+        if (updated[dateKey].taskId === id) {
+          updated[dateKey] = {
+            ...updated[dateKey],
+            taskId: undefined,
+          };
+          changed = true;
+        }
+      });
+      return changed ? updated : prev;
+    });
   };
 
   const toggleTaskComplete = (id: string) => {
@@ -387,6 +442,24 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (isNowCompleted && activeTimer && activeTimer.taskId === id) {
             stopTimer('Pekerjaan diselesaikan');
           }
+
+          // Sync with daily focus if this task is the pinned focus for its date
+          setDailyFocuses((dfPrev) => {
+            const dateKey = t.date;
+            const focus = dfPrev[dateKey];
+            if (focus && focus.taskId === id) {
+              return {
+                ...dfPrev,
+                [dateKey]: {
+                  ...focus,
+                  isCompleted: isNowCompleted,
+                  completedAt: isNowCompleted ? new Date().toISOString() : undefined,
+                },
+              };
+            }
+            return dfPrev;
+          });
+
           return {
             ...t,
             status: isNowCompleted ? 'completed' : 'pending',
@@ -395,6 +468,86 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return t;
       })
     );
+  };
+
+  // Daily Focus Methods
+  const setDailyFocus = (
+    title: string,
+    taskId?: string,
+    targetDate: string = getTodayString(),
+    motivationNote?: string
+  ): DailyFocus => {
+    const existing = dailyFocuses[targetDate];
+    const newFocus: DailyFocus = {
+      id: existing?.id || `focus-${targetDate}-${Date.now()}`,
+      date: targetDate,
+      title: title.trim(),
+      taskId,
+      isCompleted: existing ? existing.isCompleted : false,
+      motivationNote: motivationNote || existing?.motivationNote || '',
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+
+    setDailyFocuses((prev) => ({
+      ...prev,
+      [targetDate]: newFocus,
+    }));
+
+    return newFocus;
+  };
+
+  const pinTaskAsDailyFocus = (taskId: string, targetDate: string = getTodayString()) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const taskDate = task.date || targetDate;
+    setDailyFocus(task.title, task.id, taskDate, task.description || undefined);
+  };
+
+  const toggleDailyFocusComplete = (targetDate: string = getTodayString()) => {
+    setDailyFocuses((prev) => {
+      const current = prev[targetDate];
+      if (!current) return prev;
+      const nextCompleted = !current.isCompleted;
+
+      if (nextCompleted && settings.enableSound) {
+        soundChime.playSuccess();
+      }
+
+      // If linked to a task, keep task status in sync
+      if (current.taskId) {
+        setTasks((prevTasks) =>
+          prevTasks.map((t) => {
+            if (t.id === current.taskId) {
+              if (nextCompleted && activeTimer && activeTimer.taskId === t.id) {
+                stopTimer('Fokus harian diselesaikan');
+              }
+              return {
+                ...t,
+                status: nextCompleted ? 'completed' : 'pending',
+              };
+            }
+            return t;
+          })
+        );
+      }
+
+      return {
+        ...prev,
+        [targetDate]: {
+          ...current,
+          isCompleted: nextCompleted,
+          completedAt: nextCompleted ? new Date().toISOString() : undefined,
+        },
+      };
+    });
+  };
+
+  const clearDailyFocus = (targetDate: string = getTodayString()) => {
+    setDailyFocuses((prev) => {
+      const next = { ...prev };
+      delete next[targetDate];
+      return next;
+    });
   };
 
   const duplicateTaskToDate = (id: string, targetDate: string) => {
@@ -634,6 +787,18 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setTasks(INITIAL_TASKS);
       setSettings(INITIAL_SETTINGS);
       setQuickNotes(INITIAL_QUICK_NOTES);
+      const today = getTodayString();
+      setDailyFocuses({
+        [today]: {
+          id: `focus-${today}`,
+          date: today,
+          title: 'Finalisasi Modul Otentikasi dan Dashboard Pengguna',
+          taskId: 'task-30-1',
+          isCompleted: false,
+          motivationNote: 'Satu sasaran utama ini akan membuka jalan bagi rilis versi berikutnya. Tetap fokus tanpa multitasking!',
+          createdAt: new Date().toISOString(),
+        },
+      });
       setActiveTimer(null);
       setCurrentRunningElapsed(0);
       localStorage.clear();
@@ -641,6 +806,8 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const unreadNotificationCount = notifications.filter((n) => !n.isRead).length;
+  const todayStr = getTodayString();
+  const todayFocus = dailyFocuses[todayStr] || null;
 
   return (
     <WorkContext.Provider
@@ -661,6 +828,12 @@ export const WorkProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteTask,
         toggleTaskComplete,
         duplicateTaskToDate,
+        dailyFocuses,
+        todayFocus,
+        setDailyFocus,
+        toggleDailyFocusComplete,
+        clearDailyFocus,
+        pinTaskAsDailyFocus,
         startTimer,
         pauseTimer,
         resumeTimer,

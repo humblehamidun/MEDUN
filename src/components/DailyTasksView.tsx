@@ -21,6 +21,7 @@ import {
   Download,
   FileSpreadsheet,
   ChevronDown,
+  Pin,
 } from 'lucide-react';
 import { useWork } from '../context/WorkContext';
 import {
@@ -56,6 +57,9 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
     categories,
     activeTimer,
     currentRunningElapsed,
+    dailyFocuses,
+    pinTaskAsDailyFocus,
+    clearDailyFocus,
     startTimer,
     pauseTimer,
     resumeTimer,
@@ -376,12 +380,15 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
             const isCurrentActive = activeTimer && activeTimer.taskId === task.id;
             const isCompleted = task.status === 'completed';
             const isLogsExpanded = expandedLogTaskId === task.id;
+            const isPinnedAsFocus = dailyFocuses[selectedDate]?.taskId === task.id;
 
             return (
               <div
                 key={task.id}
                 className={`bg-[#111726]/80 backdrop-blur-md rounded-2xl border transition-all ${
-                  isCurrentActive
+                  isPinnedAsFocus
+                    ? 'border-amber-500/70 shadow-[0_0_15px_rgba(245,158,11,0.15)] bg-[#141724]'
+                    : isCurrentActive
                     ? 'border-indigo-500/80 shadow-[0_0_20px_rgba(99,102,241,0.2)] bg-[#131B2E]'
                     : 'border-slate-800/90 shadow-lg hover:border-slate-700'
                 }`}
@@ -425,6 +432,16 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
                         >
                           Prioritas {task.priority}
                         </span>
+
+                        {isPinnedAsFocus && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="flex items-center gap-1 font-semibold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.25)]">
+                              <Pin className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                              <span>Fokus Utama</span>
+                            </span>
+                          </>
+                        )}
 
                         {task.deadlineTime && (
                           <>
@@ -533,6 +550,30 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
                           </>
                         )
                       )}
+
+                      {/* Pin as Daily Focus toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (isPinnedAsFocus) {
+                            clearDailyFocus(selectedDate);
+                          } else {
+                            pinTaskAsDailyFocus(task.id, selectedDate);
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg border transition-all ${
+                          isPinnedAsFocus
+                            ? 'text-amber-300 bg-amber-950/90 border-amber-500/60 shadow-[0_0_8px_rgba(245,158,11,0.3)]'
+                            : 'text-slate-500 hover:text-amber-400 bg-slate-900 border-slate-800 hover:border-amber-500/40'
+                        }`}
+                        title={
+                          isPinnedAsFocus
+                            ? 'Lepas dari Fokus Utama Hari Ini'
+                            : 'Pin sebagai Fokus Utama Hari Ini'
+                        }
+                      >
+                        <Pin className={`w-4 h-4 ${isPinnedAsFocus ? 'fill-amber-400' : ''}`} />
+                      </button>
 
                       {/* Manual Log Button */}
                       <button

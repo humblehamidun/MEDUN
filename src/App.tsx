@@ -118,6 +118,7 @@ const MainAppContent: React.FC = () => {
             onOpenZenMode={() => setZenModeOpen(true)}
             onOpenExportCSV={handleOpenExportCSV}
             onOpenSettings={() => setSettingsModalOpen(true)}
+            onSelectDateToDaily={handleSelectDateToDaily}
           />
         )}
 

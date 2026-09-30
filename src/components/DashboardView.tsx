@@ -17,6 +17,7 @@ import {
   FileSpreadsheet,
   Target,
   Settings,
+  Pin,
 } from 'lucide-react';
 import { useWork } from '../context/WorkContext';
 import {
@@ -29,6 +30,8 @@ import {
 import { Task } from '../types';
 import { QuickNotesCard } from './QuickNotesCard';
 import { exportDailyTasksToCSV } from '../utils/csvExport';
+import { WeeklyProductivityChart } from './WeeklyProductivityChart';
+import { DailyFocusCard } from './DailyFocusCard';
 
 interface DashboardViewProps {
   onNavigateToDaily: () => void;
@@ -39,6 +42,7 @@ interface DashboardViewProps {
   onOpenZenMode: () => void;
   onOpenExportCSV?: (date?: string) => void;
   onOpenSettings?: () => void;
+  onSelectDateToDaily?: (date: string) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -50,6 +54,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenZenMode,
   onOpenExportCSV,
   onOpenSettings,
+  onSelectDateToDaily,
 }) => {
   const {
     tasks,
@@ -58,6 +63,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     activeTimer,
     activeTask,
     currentRunningElapsed,
+    todayFocus,
+    pinTaskAsDailyFocus,
+    clearDailyFocus,
     startTimer,
     pauseTimer,
     resumeTimer,
@@ -462,6 +470,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         </div>
       </div>
 
+      {/* Dedicated Daily Focus Area (One Major Goal for Today) */}
+      <DailyFocusCard
+        onOpenNewTaskModal={onOpenNewTaskModal}
+        onOpenZenMode={onOpenZenMode}
+        onEditTask={onEditTask}
+      />
+
+      {/* Weekly Productivity Trend Chart Section */}
+      <WeeklyProductivityChart
+        onSelectDateToDaily={onSelectDateToDaily}
+        onNavigateToMonthly={onNavigateToMonthly}
+      />
+
       {/* Main Content Layout: Tasks List + Right Widgets */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (2 Cols on lg): Today's Task List */}
@@ -533,12 +554,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   const category = categories.find((c) => c.id === task.categoryId);
                   const isCurrentActive = activeTimer && activeTimer.taskId === task.id;
                   const isCompleted = task.status === 'completed';
+                  const isPinnedAsFocus = todayFocus?.taskId === task.id;
 
                   return (
                     <div
                       key={task.id}
                       className={`p-4 sm:p-5 hover:bg-slate-800/40 transition-colors flex items-start justify-between gap-3 ${
-                        isCurrentActive ? 'bg-indigo-950/30 border-l-2 border-indigo-500' : ''
+                        isPinnedAsFocus
+                          ? 'border-l-2 border-amber-500/80 bg-amber-950/10'
+                          : isCurrentActive
+                          ? 'bg-indigo-950/30 border-l-2 border-indigo-500'
+                          : ''
                       }`}
                     >
                       <div className="flex items-start gap-3.5 flex-1 min-w-0">
@@ -579,6 +605,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               Prioritas {task.priority}
                             </span>
 
+                            {isPinnedAsFocus && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span className="flex items-center gap-1 font-semibold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-full border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.25)]">
+                                  <Pin className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                                  <span>Fokus Utama</span>
+                                </span>
+                              </>
+                            )}
+
                             {task.deadlineTime && (
                               <>
                                 <span aria-hidden="true">·</span>
@@ -615,8 +651,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Right side: Duration & Timer trigger */}
-                      <div className="flex items-center gap-3 shrink-0">
+                      {/* Right side: Duration & Timer trigger & Pin */}
+                      <div className="flex items-center gap-2.5 shrink-0">
                         <div className="text-right">
                           <div className="text-xs font-bold font-mono text-white tabular-nums">
                             {formatDuration(
@@ -628,6 +664,31 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             est: {task.estimatedMinutes}m
                           </div>
                         </div>
+
+                        {/* Pin as Daily Focus toggle */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isPinnedAsFocus) {
+                              clearDailyFocus();
+                            } else {
+                              pinTaskAsDailyFocus(task.id);
+                            }
+                          }}
+                          className={`p-2 rounded-lg border transition-all ${
+                            isPinnedAsFocus
+                              ? 'text-amber-300 bg-amber-950/90 border-amber-500/60 shadow-[0_0_10px_rgba(245,158,11,0.3)]'
+                              : 'text-slate-500 hover:text-amber-300 bg-slate-900 border-slate-800 hover:border-amber-500/40'
+                          }`}
+                          title={
+                            isPinnedAsFocus
+                              ? 'Lepas dari Fokus Utama Hari Ini'
+                              : 'Sematkan sebagai Fokus Utama Hari Ini'
+                          }
+                        >
+                          <Pin className={`w-3.5 h-3.5 ${isPinnedAsFocus ? 'fill-amber-400' : ''}`} />
+                        </button>
 
                         {/* Timer control */}
                         {isCurrentActive ? (

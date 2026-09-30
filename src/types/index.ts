@@ -77,3 +77,14 @@ export interface QuickNote {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface DailyFocus {
+  id: string;
+  date: string; // YYYY-MM-DD
+  title: string;
+  taskId?: string;
+  isCompleted: boolean;
+  completedAt?: string;
+  motivationNote?: string;
+  createdAt: string;
+}

@@ -13,6 +13,7 @@ import {
   Flame,
   Sun,
   Moon,
+  Pin,
 } from 'lucide-react';
 import { useWork } from '../context/WorkContext';
 import { formatClockTimer } from '../utils/dateUtils';
@@ -38,6 +39,7 @@ export const ZenFocusMode: React.FC<ZenFocusModeProps> = ({ isOpen, onClose }) =
     activeTask,
     tasks,
     categories,
+    todayFocus,
     currentRunningElapsed,
     startTimer,
     pauseTimer,
@@ -267,6 +269,14 @@ export const ZenFocusMode: React.FC<ZenFocusModeProps> = ({ isOpen, onClose }) =
               >
                 Prioritas {activeTask.priority}
               </span>
+              {todayFocus?.taskId === activeTask.id && (
+                <>
+                  <span className="opacity-40">·</span>
+                  <span className="flex items-center gap-1 text-amber-400 font-semibold">
+                    <Pin className="w-3.5 h-3.5 fill-amber-400" /> Fokus Utama Hari Ini
+                  </span>
+                </>
+              )}
               {isPomodoro && (
                 <>
                   <span className="opacity-40">·</span>
