@@ -13,6 +13,10 @@ import {
   AlertCircle,
   Timer,
   Sparkles,
+  Download,
+  FileSpreadsheet,
+  Target,
+  Settings,
 } from 'lucide-react';
 import { useWork } from '../context/WorkContext';
 import {
@@ -24,6 +28,7 @@ import {
 } from '../utils/dateUtils';
 import { Task } from '../types';
 import { QuickNotesCard } from './QuickNotesCard';
+import { exportDailyTasksToCSV } from '../utils/csvExport';
 
 interface DashboardViewProps {
   onNavigateToDaily: () => void;
@@ -32,6 +37,8 @@ interface DashboardViewProps {
   onOpenNewTaskModal: () => void;
   onEditTask: (task: Task) => void;
   onOpenZenMode: () => void;
+  onOpenExportCSV?: (date?: string) => void;
+  onOpenSettings?: () => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -41,6 +48,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onOpenNewTaskModal,
   onEditTask,
   onOpenZenMode,
+  onOpenExportCSV,
+  onOpenSettings,
 }) => {
   const {
     tasks,
@@ -60,6 +69,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const todayTasks = tasks.filter((t) => t.date === todayStr);
 
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'completed'>('all');
+  const [csvToast, setCsvToast] = useState<string | null>(null);
+
+  const handleQuickExportCSV = () => {
+    try {
+      const result = exportDailyTasksToCSV(tasks, categories, todayStr, {
+        includeSessionDetails: true,
+        includeSummaryRow: true,
+      });
+      setCsvToast(`Laporan CSV "${result.filename}" (${result.count} tugas hari ini) berhasil diunduh!`);
+      setTimeout(() => setCsvToast(null), 4500);
+    } catch (err) {
+      console.error('Failed to export CSV:', err);
+    }
+  };
 
   // Today calculations
   const totalSecondsToday = todayTasks.reduce(
@@ -69,7 +92,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   const totalHoursToday = totalSecondsToday / 3600;
   const goalHours = settings.dailyWorkGoalHours || 7;
-  const goalPercentage = Math.min(100, Math.round((totalHoursToday / goalHours) * 100));
+  const goalSeconds = goalHours * 3600;
+  const goalPercentage = Math.round((totalSecondsToday / goalSeconds) * 100);
+  const remainingSeconds = Math.max(0, goalSeconds - totalSecondsToday);
+  const excessSeconds = Math.max(0, totalSecondsToday - goalSeconds);
 
   const completedTodayTasks = todayTasks.filter((t) => t.status === 'completed');
   const completionRate = todayTasks.length > 0
@@ -124,7 +150,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span>Studio Produktivitas & Fokus Kerja</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-display font-extrabold tracking-tight text-white leading-tight">
-              Kuasai Waktu, Capai Kualitas Tertinggi.
+              Bertanggungjawablah dan Jangan Malas.
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed max-w-xl">
               Pantau alur kerja setiap hari dengan presisi tinggi, kelola prioritas tanpa gangguan, dan evaluasi capaian produktivitas Anda.
@@ -144,6 +170,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
+              onClick={() => onOpenExportCSV ? onOpenExportCSV(todayStr) : handleQuickExportCSV()}
+              className="flex items-center gap-2 px-3.5 py-2.5 text-xs font-semibold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/40 rounded-xl transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]"
+              title="Unduh laporan aktivitas kerja hari ini ke dalam format CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Unduh CSV Harian</span>
+            </button>
+            <button
               onClick={onOpenZenMode}
               className="flex items-center gap-2 px-4 py-2.5 text-xs font-semibold text-indigo-300 bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/40 rounded-xl transition-all shadow-[0_0_15px_rgba(99,102,241,0.2)]"
               title="Buka Ruang Fokus Zen Bebas Distraksi"
@@ -160,6 +194,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* CSV Toast Notification Banner */}
+      {csvToast && (
+        <div className="p-3 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-xs text-emerald-200 flex items-center justify-between shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">{csvToast}</span>
+          </div>
+          <button
+            onClick={() => setCsvToast(null)}
+            className="p-1 hover:text-white text-emerald-400 transition-colors"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {/* 4 Metric Cards in Glassmorphism Dark Style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -256,6 +306,159 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <p className="mt-3 text-[11px] text-slate-400 leading-normal">
             Pencatatan waktu aktif konsisten selama 5 hari kerja berturut-turut.
           </p>
+        </div>
+      </div>
+
+      {/* Dedicated Daily Goal Achievement Progress Bar Card */}
+      <div className="bg-[#111726]/85 backdrop-blur-md rounded-2xl border border-slate-800/90 p-5 sm:p-6 shadow-xl relative overflow-hidden">
+        {/* Ambient colored lighting behind progress card */}
+        <div
+          className={`absolute -right-16 -top-16 w-56 h-56 rounded-full blur-[80px] pointer-events-none transition-all duration-700 ${
+            goalPercentage >= 100 ? 'bg-emerald-500/20' : 'bg-indigo-600/15'
+          }`}
+        />
+
+        <div className="relative z-10 space-y-4">
+          {/* Header Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-11 h-11 rounded-xl flex items-center justify-center border shadow-inner shrink-0 ${
+                  goalPercentage >= 100
+                    ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                    : 'bg-indigo-950/80 border-indigo-500/50 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.25)]'
+                }`}
+              >
+                <Target className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold font-display text-white">
+                    Pencapaian Target Jam Kerja Harian
+                  </h2>
+                  <span
+                    className={`px-2.5 py-0.5 text-xs font-semibold rounded-full border ${
+                      goalPercentage >= 100
+                        ? 'bg-emerald-950/90 text-emerald-300 border-emerald-500/50 shadow-[0_0_10px_rgba(52,211,153,0.3)]'
+                        : goalPercentage >= 75
+                        ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40'
+                        : goalPercentage >= 50
+                        ? 'bg-indigo-950/80 text-indigo-300 border-indigo-500/40'
+                        : 'bg-slate-800/80 text-slate-300 border-slate-700'
+                    }`}
+                  >
+                    {goalPercentage >= 100
+                      ? 'Target Tercapai! 🎉'
+                      : goalPercentage >= 75
+                      ? 'Hampir Tercapai ⚡'
+                      : goalPercentage >= 50
+                      ? 'Setengah Jalan 🚀'
+                      : 'Fokus Berjalan'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">
+                  Target harian ditetapkan:{' '}
+                  <span className="text-slate-200 font-semibold">{goalHours} Jam</span> · Waktu tercatat:{' '}
+                  <span className="text-white font-mono font-semibold">
+                    {formatDuration(totalSecondsToday)}
+                  </span>{' '}
+                  <span className="text-slate-400 font-mono">
+                    ({formatDurationHoursDecimal(totalSecondsToday)} Jam)
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Percent & Settings Trigger */}
+            <div className="flex items-center gap-4 self-start sm:self-auto">
+              <div className="text-left sm:text-right">
+                <span className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold block">
+                  Progres Hari Ini
+                </span>
+                <span
+                  className={`text-2xl sm:text-3xl font-extrabold font-mono tabular-nums ${
+                    goalPercentage >= 100 ? 'text-emerald-400' : 'text-indigo-400'
+                  }`}
+                >
+                  {goalPercentage}%
+                </span>
+              </div>
+              {onOpenSettings && (
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-[#0B0F19] hover:bg-slate-800 border border-slate-700/80 rounded-xl transition-all shadow-xs"
+                  title="Sesuaikan Target Jam Kerja Harian di Pengaturan"
+                >
+                  <Settings className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Ubah Target</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Large Visual Progress Bar with Milestones */}
+          <div className="space-y-2 pt-1">
+            <div className="relative w-full bg-[#0B0F19] border border-slate-800 h-4 sm:h-5 rounded-full overflow-hidden p-0.5 shadow-inner">
+              <div
+                className={`h-full rounded-full transition-all duration-700 ease-out relative ${
+                  goalPercentage >= 100
+                    ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.8)]'
+                    : goalPercentage >= 50
+                    ? 'bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-400 shadow-[0_0_14px_rgba(99,102,241,0.7)]'
+                    : 'bg-gradient-to-r from-indigo-700 to-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.6)]'
+                }`}
+                style={{ width: `${Math.min(100, Math.max(2, goalPercentage))}%` }}
+              >
+                {/* Subtle light shimmer stripe */}
+                <div className="absolute inset-0 bg-white/15 rounded-full" />
+              </div>
+            </div>
+
+            {/* Milestones Scale */}
+            <div className="flex items-center justify-between text-[11px] font-mono text-slate-500 px-1">
+              <span>0% (0j)</span>
+              <span>25% ({(goalHours * 0.25).toFixed(1)}j)</span>
+              <span>50% ({(goalHours * 0.5).toFixed(1)}j)</span>
+              <span>75% ({(goalHours * 0.75).toFixed(1)}j)</span>
+              <span className={goalPercentage >= 100 ? 'text-emerald-400 font-bold' : ''}>
+                100% ({goalHours}j)
+              </span>
+            </div>
+          </div>
+
+          {/* Subtext info and status footer */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs pt-2 border-t border-slate-800/80 gap-2">
+            <div className="text-slate-300 flex items-center gap-1.5">
+              {goalPercentage >= 100 ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>
+                    Kerja hebat! Target harian tercapai dan Anda melampaui komitmen sebesar{' '}
+                    <strong className="text-emerald-400 font-mono font-bold">
+                      +{formatDuration(excessSeconds)}
+                    </strong>
+                    .
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Clock className="w-4 h-4 text-indigo-400 shrink-0" />
+                  <span>
+                    Tersisa{' '}
+                    <strong className="text-white font-mono font-bold">
+                      {formatDuration(remainingSeconds)}
+                    </strong>{' '}
+                    lagi untuk memenuhi komitmen {goalHours} jam hari ini.
+                  </span>
+                </>
+              )}
+            </div>
+
+            <span className="text-[11px] text-slate-500 font-mono">
+              Berdasarkan akumulasi tugas & timer hari ini
+            </span>
+          </div>
         </div>
       </div>
 

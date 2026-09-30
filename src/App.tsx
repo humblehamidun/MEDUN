@@ -12,6 +12,7 @@ import { CategoryModal } from './components/CategoryModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { SettingsModal } from './components/SettingsModal';
 import { ZenFocusMode } from './components/ZenFocusMode';
+import { ExportCSVModal } from './components/ExportCSVModal';
 import { getTodayString } from './utils/dateUtils';
 import { Task, JobCategory } from './types';
 
@@ -35,6 +36,8 @@ const MainAppContent: React.FC = () => {
   const [notificationsModalOpen, setNotificationsModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [zenModeOpen, setZenModeOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTargetDate, setExportTargetDate] = useState<string>(getTodayString());
 
   // Auto open Zen mode if preference is active and a timer starts running
   useEffect(() => {
@@ -44,6 +47,11 @@ const MainAppContent: React.FC = () => {
   }, [activeTimer?.isRunning, settings.autoZenOnTimerStart]);
 
   // Handlers
+  const handleOpenExportCSV = (date?: string) => {
+    setExportTargetDate(date || selectedDate || getTodayString());
+    setExportModalOpen(true);
+  };
+
   const handleOpenNewTaskModal = (date?: string, categoryId?: string) => {
     setTaskToEdit(null);
     setTaskDefaultDate(date || selectedDate || getTodayString());
@@ -108,6 +116,8 @@ const MainAppContent: React.FC = () => {
             onOpenNewTaskModal={() => handleOpenNewTaskModal()}
             onEditTask={handleEditTask}
             onOpenZenMode={() => setZenModeOpen(true)}
+            onOpenExportCSV={handleOpenExportCSV}
+            onOpenSettings={() => setSettingsModalOpen(true)}
           />
         )}
 
@@ -119,6 +129,7 @@ const MainAppContent: React.FC = () => {
             onEditTask={handleEditTask}
             onOpenManualLog={handleOpenManualLog}
             onOpenZenMode={() => setZenModeOpen(true)}
+            onOpenExportCSV={handleOpenExportCSV}
           />
         )}
 
@@ -188,6 +199,14 @@ const MainAppContent: React.FC = () => {
       <SettingsModal
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
+        onOpenExportCSV={() => handleOpenExportCSV()}
+      />
+
+      {/* Export CSV & Data Backup Modal */}
+      <ExportCSVModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        defaultDate={exportTargetDate}
       />
 
       {/* Zen Focus Mode Minimalist Viewport */}

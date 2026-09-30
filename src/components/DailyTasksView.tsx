@@ -18,6 +18,9 @@ import {
   History,
   AlertTriangle,
   Sparkles,
+  Download,
+  FileSpreadsheet,
+  ChevronDown,
 } from 'lucide-react';
 import { useWork } from '../context/WorkContext';
 import {
@@ -27,6 +30,7 @@ import {
   getTodayString,
 } from '../utils/dateUtils';
 import { PriorityLevel, Task } from '../types';
+import { exportDailyTasksToCSV } from '../utils/csvExport';
 
 interface DailyTasksViewProps {
   selectedDate: string;
@@ -35,6 +39,7 @@ interface DailyTasksViewProps {
   onEditTask: (task: Task) => void;
   onOpenManualLog: (task: Task) => void;
   onOpenZenMode: () => void;
+  onOpenExportCSV?: (date?: string) => void;
 }
 
 export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
@@ -44,6 +49,7 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
   onEditTask,
   onOpenManualLog,
   onOpenZenMode,
+  onOpenExportCSV,
 }) => {
   const {
     tasks,
@@ -64,9 +70,24 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
   const [selectedPriorityFilter, setSelectedPriorityFilter] = useState<string>('all');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [expandedLogTaskId, setExpandedLogTaskId] = useState<string | null>(null);
+  const [csvToast, setCsvToast] = useState<string | null>(null);
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
 
   const todayStr = getTodayString();
   const isToday = selectedDate === todayStr;
+
+  const handleQuickExportCSV = () => {
+    try {
+      const result = exportDailyTasksToCSV(tasks, categories, selectedDate, {
+        includeSessionDetails: true,
+        includeSummaryRow: true,
+      });
+      setCsvToast(`Laporan CSV "${result.filename}" (${result.count} tugas) berhasil diunduh!`);
+      setTimeout(() => setCsvToast(null), 4500);
+    } catch (e) {
+      console.error('Failed to export CSV:', e);
+    }
+  };
 
   // Filter tasks for selected date
   const dayTasks = tasks.filter((t) => t.date === selectedDate);
@@ -148,7 +169,66 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+        <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          {/* CSV Export Button & Dropdown */}
+          <div className="relative">
+            <div className="inline-flex rounded-xl shadow-xs">
+              <button
+                type="button"
+                onClick={handleQuickExportCSV}
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 rounded-l-xl transition-all border border-emerald-500/40 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.2)]"
+                title="Unduh laporan aktivitas harian tanggal ini dalam format CSV"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Unduh CSV</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setExportDropdownOpen(!exportDropdownOpen)}
+                className="px-2 py-2 text-xs text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border-y border-r border-emerald-500/40 rounded-r-xl transition-all"
+                title="Pilihan Opsi Ekspor CSV"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Dropdown Menu */}
+            {exportDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-64 bg-[#111726] border border-slate-700 rounded-xl shadow-2xl py-1.5 z-30 animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExportDropdownOpen(false);
+                    handleQuickExportCSV();
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800/80 flex items-center gap-2.5 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <div>
+                    <div className="font-semibold text-white">Unduh CSV Hari Ini</div>
+                    <div className="text-[10px] text-slate-400">Termasuk log sesi waktu & ringkasan</div>
+                  </div>
+                </button>
+                {onOpenExportCSV && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setExportDropdownOpen(false);
+                      onOpenExportCSV(selectedDate);
+                    }}
+                    className="w-full text-left px-3.5 py-2 text-xs text-slate-200 hover:bg-slate-800/80 flex items-center gap-2.5 border-t border-slate-800 transition-colors"
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-400" />
+                    <div>
+                      <div className="font-semibold text-white">Sesuaikan Opsi / Cadangan Penuh</div>
+                      <div className="text-[10px] text-slate-400">Pilih tanggal atau ekspor semua data</div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={onOpenZenMode}
             className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-indigo-300 bg-indigo-950/80 hover:bg-indigo-900 rounded-xl transition-all border border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.2)]"
@@ -164,6 +244,22 @@ export const DailyTasksView: React.FC<DailyTasksViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* CSV Toast Notification Banner */}
+      {csvToast && (
+        <div className="p-3 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-xs text-emerald-200 flex items-center justify-between shadow-lg animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">{csvToast}</span>
+          </div>
+          <button
+            onClick={() => setCsvToast(null)}
+            className="p-1 hover:text-white text-emerald-400 transition-colors"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {/* Day Overview Strip */}
       <div className="bg-[#111726]/80 backdrop-blur-md rounded-2xl border border-slate-800/90 p-4 shadow-xl flex flex-wrap items-center justify-between gap-4 text-xs">

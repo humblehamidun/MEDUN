@@ -22,6 +22,7 @@ import {
   getFirstDayOfWeek,
 } from '../utils/dateUtils';
 import { Task } from '../types';
+import { triggerCSVDownload, escapeCSVField } from '../utils/csvExport';
 
 interface MonthlyReportViewProps {
   onSelectDateToDaily: (date: string) => void;
@@ -141,26 +142,20 @@ export const MonthlyReportView: React.FC<MonthlyReportViewProps> = ({
     const rows = monthTasks.map((t) => {
       const cat = categories.find((c) => c.id === t.categoryId)?.name || 'Umum';
       return [
-        `"${t.id}"`,
-        `"${t.date}"`,
-        `"${t.title.replace(/"/g, '""')}"`,
-        `"${cat}"`,
-        `"${t.priority}"`,
-        `"${t.status}"`,
-        t.estimatedMinutes,
-        t.actualDurationSeconds,
-        (t.actualDurationSeconds / 3600).toFixed(2),
-      ];
+        escapeCSVField(t.id),
+        escapeCSVField(t.date),
+        escapeCSVField(t.title),
+        escapeCSVField(cat),
+        escapeCSVField(t.priority),
+        escapeCSVField(t.status),
+        escapeCSVField(t.estimatedMinutes),
+        escapeCSVField(t.actualDurationSeconds),
+        escapeCSVField((t.actualDurationSeconds / 3600).toFixed(2)),
+      ].join(',');
     });
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Laporan_Produktivitas_${selectedYear}_${selectedMonth + 1}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const csvContent = [headers.join(','), ...rows].join('\r\n');
+    triggerCSVDownload(csvContent, `Laporan_Produktivitas_${selectedYear}_${selectedMonth + 1}.csv`);
   };
 
   const handlePrint = () => {
