@@ -1,0 +1,6 @@
+{
+  "name": "KerjaAlur - Pencatatan Kerja & Produktivitas Harian",
+  "description": "Aplikasi pelacak pekerjaan harian, time tracker, manajemen kategori & prioritas tugas, serta analitik produktivitas bulanan dengan sistem pengingat disiplin.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
